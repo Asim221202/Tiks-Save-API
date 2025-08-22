@@ -11,13 +11,20 @@ function extractVideoId(url) {
   return match ? match[1] : null;
 }
 
-// Kısaltılmış linki çözme
+// Tüm redirect zincirini çöz
 async function resolveRedirect(url) {
-  const response = await fetch(url, { redirect: "manual" });
-  if (response.status === 301 || response.status === 302) {
-    return response.headers.get("location");
+  let currentUrl = url;
+  for (let i = 0; i < 5; i++) { // max 5 redirect
+    const response = await fetch(currentUrl, { redirect: "manual" });
+    if (response.status === 301 || response.status === 302) {
+      const loc = response.headers.get("location");
+      if (!loc) break;
+      currentUrl = loc.startsWith("http") ? loc : `https://www.tiktok.com${loc}`;
+    } else {
+      break;
+    }
   }
-  return url;
+  return currentUrl;
 }
 
 app.get("/api/tiktok", async (req, res) => {
@@ -25,7 +32,7 @@ app.get("/api/tiktok", async (req, res) => {
   if (!videoUrl) return res.status(400).json({ error: "URL is required" });
 
   try {
-    // Eğer kısa link geldiyse önce çöz
+    // Kısa link çöz
     if (videoUrl.includes("vt.tiktok.com")) {
       videoUrl = await resolveRedirect(videoUrl);
     }
@@ -39,9 +46,20 @@ app.get("/api/tiktok", async (req, res) => {
     const response = await fetch(apiUrl, {
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
+          "com.ss.android.ugc.trill/290 (Linux; U; Android 11; en_US; Pixel 5 Build/RQ3A.210805.001.A1)",
+        "Accept": "application/json",
       },
     });
+
+    // JSON kontrolü
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      const text = await response.text();
+      return res.status(500).json({
+        error: "TikTok did not return JSON",
+        responseSnippet: text.slice(0, 200) // hata için debug
+      });
+    }
 
     const data = await response.json();
     const videoData = data.aweme_list?.[0];
@@ -66,5 +84,5 @@ app.get("/api/tiktok", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server is running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
