@@ -1,15 +1,19 @@
 import express from "express";
 import fetch from "node-fetch";
+import dotenv from "dotenv";
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// TikTok video ID çıkar
 function extractVideoId(url) {
   const regex = /\/video\/(\d+)/;
   const match = url.match(regex);
   return match ? match[1] : null;
 }
 
+// Kısaltılmış linkleri çöz
 async function resolveRedirect(url) {
   let currentUrl = url;
   for (let i = 0; i < 5; i++) {
@@ -30,6 +34,7 @@ app.get("/api/tiktok", async (req, res) => {
   if (!videoUrl) return res.status(400).json({ error: "URL is required" });
 
   try {
+    // Kısa link çöz
     if (videoUrl.includes("vt.tiktok.com")) {
       videoUrl = await resolveRedirect(videoUrl);
     }
@@ -47,16 +52,16 @@ app.get("/api/tiktok", async (req, res) => {
       },
     });
 
-    const raw = await response.text(); // önce ham veriyi al
-    let data;
+    const raw = await response.text();
 
+    let data;
     try {
-      data = JSON.parse(raw); // JSON parse etmeyi dene
+      data = JSON.parse(raw);
     } catch {
       return res.status(500).json({
         error: "TikTok did not return valid JSON",
         status: response.status,
-        snippet: raw.slice(0, 300) // hata ayıklama için ilk 300 karakter
+        snippet: raw.slice(0, 300)
       });
     }
 
@@ -82,5 +87,5 @@ app.get("/api/tiktok", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
+  console.log(`🚀 TikTok API running on http://localhost:${PORT}`);
 });
