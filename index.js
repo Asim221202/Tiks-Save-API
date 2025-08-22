@@ -11,7 +11,7 @@ function extractVideoId(url) {
   return match ? match[1] : null;
 }
 
-// Tüm redirect zincirini çöz
+// Tüm redirect zincirini çöz (kısaltılmış linkler için)
 async function resolveRedirect(url) {
   let currentUrl = url;
   for (let i = 0; i < 5; i++) { // max 5 redirect
@@ -32,7 +32,7 @@ app.get("/api/tiktok", async (req, res) => {
   if (!videoUrl) return res.status(400).json({ error: "URL is required" });
 
   try {
-    // Kısa link çöz
+    // Eğer kısa linkse çöz
     if (videoUrl.includes("vt.tiktok.com")) {
       videoUrl = await resolveRedirect(videoUrl);
     }
@@ -51,16 +51,20 @@ app.get("/api/tiktok", async (req, res) => {
       },
     });
 
-    // JSON kontrolü
     const contentType = response.headers.get("content-type");
+
+    // JSON dönmezse debug için hata mesajı ver
     if (!contentType || !contentType.includes("application/json")) {
       const text = await response.text();
       return res.status(500).json({
         error: "TikTok did not return JSON",
-        responseSnippet: text.slice(0, 200) // hata için debug
+        status: response.status,
+        headers: Object.fromEntries(response.headers),
+        snippet: text.slice(0, 300) // ilk 300 karakter
       });
     }
 
+    // JSON parse
     const data = await response.json();
     const videoData = data.aweme_list?.[0];
     if (!videoData) return res.status(404).json({ error: "Video not found" });
