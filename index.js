@@ -4,17 +4,15 @@ import fetch from "node-fetch";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// TikTok URL’den video ID çıkarma
 function extractVideoId(url) {
   const regex = /\/video\/(\d+)/;
   const match = url.match(regex);
   return match ? match[1] : null;
 }
 
-// Tüm redirect zincirini çöz (kısaltılmış linkler için)
 async function resolveRedirect(url) {
   let currentUrl = url;
-  for (let i = 0; i < 5; i++) { // max 5 redirect
+  for (let i = 0; i < 5; i++) {
     const response = await fetch(currentUrl, { redirect: "manual" });
     if (response.status === 301 || response.status === 302) {
       const loc = response.headers.get("location");
@@ -32,7 +30,6 @@ app.get("/api/tiktok", async (req, res) => {
   if (!videoUrl) return res.status(400).json({ error: "URL is required" });
 
   try {
-    // Eğer kısa linkse çöz
     if (videoUrl.includes("vt.tiktok.com")) {
       videoUrl = await resolveRedirect(videoUrl);
     }
@@ -40,7 +37,6 @@ app.get("/api/tiktok", async (req, res) => {
     const videoId = extractVideoId(videoUrl);
     if (!videoId) return res.status(400).json({ error: "Invalid TikTok URL" });
 
-    // TikTok feed endpoint
     const apiUrl = `https://api16-normal-c-useast1a.tiktokv.com/aweme/v1/feed/?aweme_id=${videoId}`;
 
     const response = await fetch(apiUrl, {
@@ -51,21 +47,19 @@ app.get("/api/tiktok", async (req, res) => {
       },
     });
 
-    const contentType = response.headers.get("content-type");
+    const raw = await response.text(); // önce ham veriyi al
+    let data;
 
-    // JSON dönmezse debug için hata mesajı ver
-    if (!contentType || !contentType.includes("application/json")) {
-      const text = await response.text();
+    try {
+      data = JSON.parse(raw); // JSON parse etmeyi dene
+    } catch {
       return res.status(500).json({
-        error: "TikTok did not return JSON",
+        error: "TikTok did not return valid JSON",
         status: response.status,
-        headers: Object.fromEntries(response.headers),
-        snippet: text.slice(0, 300) // ilk 300 karakter
+        snippet: raw.slice(0, 300) // hata ayıklama için ilk 300 karakter
       });
     }
 
-    // JSON parse
-    const data = await response.json();
     const videoData = data.aweme_list?.[0];
     if (!videoData) return res.status(404).json({ error: "Video not found" });
 
